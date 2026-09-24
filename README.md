@@ -1,5 +1,9 @@
 # Air-Waves · macOS 客户端
 
+清冷后朋克无线电风格的单页听觉节拍发生器。 用 Web Audio API 生成双耳节拍 / 等时节拍，为工作、学习时营造适合专注与放松的声音环境。
+
+本工具仅用于放松与专注辅助，非医疗设备。 不用于诊断、治疗或预防任何疾病。 双耳节拍对每个人的主观感受差异很大，如感到头晕、耳鸣或任何不适，请立即停止使用。
+
 [![Build DMG](https://github.com/Luxury37/air-waves-macos/actions/workflows/build-dmg.yml/badge.svg)](https://github.com/Luxury37/air-waves-macos/actions/workflows/build-dmg.yml)
 [![Release](https://img.shields.io/github/v/release/Luxury37/air-waves-macos)](https://github.com/Luxury37/air-waves-macos/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
