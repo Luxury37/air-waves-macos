@@ -1,10 +1,15 @@
 # Air-Waves · macOS 客户端
 
+[![Build DMG](https://github.com/Luxury37/air-waves-macos/actions/workflows/build-dmg.yml/badge.svg)](https://github.com/Luxury37/air-waves-macos/actions/workflows/build-dmg.yml)
+[![Release](https://img.shields.io/github/v/release/Luxury37/air-waves-macos)](https://github.com/Luxury37/air-waves-macos/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 把 [Air-Waves](https://github.com/Luxury37/Air-Waves)（纯静态网页版听觉节拍发生器）包装成
 **原生 macOS 应用**：独立窗口、Dock 图标、原生菜单与快捷键、偏好设置持久化、日志、退出清理。
 
 **本仓库只包含 macOS 客户端外壳。** 网页应用本身（`index.html` / `app.js` / `audio.js` /
-`styles.css` 与 `assets/` 素材）不在本仓库内，构建时从同级目录读取。
+`styles.css` 与 `assets/` 素材）不在本仓库内，构建时从同级目录读取
+（[发布的 DMG](https://github.com/Luxury37/air-waves-macos/releases) 已把它们打包在内，开箱即用）。
 
 |  |  |
 |---|---|
@@ -18,11 +23,32 @@
 
 ---
 
-## 快速开始
+## 直接下载使用
+
+不想自己编译的话，去 [**Releases**](https://github.com/Luxury37/air-waves-macos/releases)
+下载最新的 `.dmg`：
+
+1. 打开 `.dmg`，把 **Air-Waves.app** 拖进 **Applications**
+2. 首次打开若被 Gatekeeper 拦截：
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Air-Waves.app
+   ```
+
+   或在「系统设置 → 隐私与安全性」中点「仍要打开」
+
+DMG 是**自包含**的——网页应用资源已打包在 App 内部，不需要额外准备任何东西。
+需要 **Apple Silicon（arm64）** 与 **macOS 13.0+**。
+
+想自己编译或改代码，继续看下面。
+
+---
+
+## 从源码构建
 
 ### 1. 准备目录布局
 
-本客户端需要一个 Air-Waves 网页应用源码目录，两者**并列放置**：
+从源码构建时需要一个 Air-Waves 网页应用源码目录，两者**并列放置**：
 
 ```
 Documents/
@@ -282,6 +308,8 @@ codesign -dv /Applications/Air-Waves.app
 
 ```
 air-waves-macos/
+├── .github/workflows/
+│   └── build-dmg.yml  自动构建 .dmg 并发布 Release
 ├── macos/
 │   ├── Sources/AirWaves/
 │   │   ├── Main.swift        应用入口、AppDelegate、生命周期、偏好设置面板
@@ -300,6 +328,7 @@ air-waves-macos/
 │   └── make_icons.py  图标生成（.ico → .icns，含圆角裁剪）
 ├── docs/DESIGN.md     完整设计文档
 ├── build/             构建产物（已 gitignore）
+├── LICENSE            MIT
 └── README.md          本文件
 ```
 
@@ -314,3 +343,52 @@ air-waves-macos/
 
 本工具仅用于放松与专注辅助，**非医疗设备**，不用于诊断、治疗或预防任何疾病。
 双耳节拍的主观感受因人而异，如出现头晕、耳鸣或任何不适，请立即停止使用。
+
+---
+
+## 自动构建与发布
+
+[`.github/workflows/build-dmg.yml`](.github/workflows/build-dmg.yml) 在 GitHub 上自动构建 `.dmg`。
+
+| 触发方式 | 行为 |
+|---|---|
+| 推送 `v*` 标签（如 `v1.0.0`） | 构建 → 自检 → 创建 GitHub Release 并附上 DMG 与 SHA-256 |
+| 手动触发（Actions 页面 → Run workflow） | 构建 → 自检 → 上传为 Artifact；勾选 `publish_release` 时同时发 Release |
+
+发布前会依次校验：产物结构完整、可执行文件为 arm64、ad-hoc 签名有效、
+DMG 完整性、DMG 挂载后内含 App 与 Applications 快捷方式。
+**校验不通过就不会发布**，避免把坏包发出去。
+
+### 发一个版本
+
+```bash
+cd air-waves-macos
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+推送后到 Actions 页面看进度，完成后 Release 会自动出现在
+<https://github.com/Luxury37/air-waves-macos/releases>。
+
+### 为什么 CI 能构建成功
+
+本仓库不含网页应用资源，CI 会先把
+[`Luxury37/Air-Waves`](https://github.com/Luxury37/Air-Waves) 克隆到工作目录的上一级，
+使两者构成「并列布局」，构建脚本即可自动发现它。
+产物是**自包含**的——网页应用资源会被打包进 App 内部。
+
+### 关于 arm64
+
+工作流固定使用 Apple Silicon runner（`macos-15`），因为构建目标是
+`arm64-apple-macos13.0`。若需要 Intel 支持，需改 `scripts/build.sh` 的
+`--target` 并构建 universal 二进制。
+
+---
+
+## 许可
+
+本项目采用 [MIT License](LICENSE)。
+
+网页应用 [Air-Waves](https://github.com/Luxury37/Air-Waves) 由同一作者维护，
+其资源（`index.html` / `app.js` / `audio.js` / `styles.css` 与 `assets/` 素材）
+**不在本仓库内**，仅在构建时读取并打包进产物。

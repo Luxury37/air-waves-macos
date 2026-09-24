@@ -1,0 +1,201 @@
+name: Build DMG
+
+# ============================================================================
+#  构建 macOS 客户端并打包 DMG
+#
+#  触发方式：
+#    * 推送 v* 标签        → 构建 + 自检 + 发布 GitHub Release（附 DMG）
+#    * 手动触发 (Actions 页面) → 构建 + 自检 + 上传为 Artifact
+#      勾选 "publish_release" 时同时发布 Release
+#
+#  为什么需要先克隆 Air-Waves 网页应用：
+#    本仓库只含客户端外壳，index.html / app.js / audio.js / styles.css
+#    与 assets/ 背景图都来自网页应用仓库。构建脚本会在仓库的上一级目录
+#    寻找并列放置的网页应用（见 scripts/build.sh 的 find_web_root）。
+#    GitHub Actions 的工作目录是 <runner>/work/<repo>/<repo>，
+#    因此把网页应用克隆到 <runner>/work/<repo>/Air-Waves 即可被自动发现。
+# ============================================================================
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: '同时创建 GitHub Release（附 DMG）'
+        type: boolean
+        default: false
+
+# 创建 Release 需要写权限
+permissions:
+  contents: write
+
+# 同一分支/标签的重复触发只保留最新一次，避免并发覆盖产物
+concurrency:
+  group: dmg-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # 网页应用仓库（提供 index.html / app.js / 音频引擎 / 背景图）
+  WEB_REPO: Luxury37/Air-Waves
+
+jobs:
+  build-dmg:
+    name: 构建 .dmg
+    # Apple Silicon runner：构建脚本的 target 是 arm64-apple-macos13.0。
+    # 只有 arm64 runner 才能产出可在 Apple Silicon 上原生运行的二进制。
+    runs-on: macos-15
+
+    steps:
+      # ---------------------------------------------------------------- 准备
+      - name: 检出本仓库
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 安装 Pillow（图标生成依赖）
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install Pillow
+          python3 -c "import PIL; print('Pillow', PIL.__version__)"
+
+      - name: 确认 Swift 工具链
+        run: |
+          swiftc --version
+          xcode-select -p
+          xcrun --show-sdk-path --sdk macosx
+
+      - name: 克隆 Air-Waves 网页应用
+        run: |
+          # 克隆到本仓库的上一级目录，与仓库名并列，供 build.sh 自动发现
+          PARENT="$(cd "${GITHUB_WORKSPACE}/.." && pwd)"
+          git clone --depth 1 "https://github.com/${WEB_REPO}.git" "${PARENT}/Air-Waves"
+          echo "网页应用已就位："
+          ls -la "${PARENT}/Air-Waves" | head -20
+
+      # ---------------------------------------------------------------- 构建
+      - name: 构建 .app
+        run: ./scripts/build.sh --clean
+
+      - name: 打包 .dmg
+        run: ./scripts/make_dmg.sh --no-build
+
+      - name: 定位产物
+        id: artifact
+        run: |
+          DMG="$(ls build/*.dmg | head -1)"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+                     build/Air-Waves.app/Contents/Info.plist)"
+          echo "dmg=${DMG}"       >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "${DMG}")" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "产物：${DMG}"
+          ls -lh build/*.dmg
+
+      # ---------------------------------------------------------------- 自检
+      # 在发布之前先验证产物真的能用，避免把坏包发给用户
+      - name: 校验产物结构
+        run: |
+          set -e
+          APP="build/Air-Waves.app"
+          for f in \
+            "Contents/Info.plist" \
+            "Contents/MacOS/AirWaves" \
+            "Contents/Resources/AppIcon.icns" \
+            "Contents/Resources/web/index.html" \
+            "Contents/Resources/web/app.js" \
+            "Contents/Resources/web/audio.js" \
+            "Contents/Resources/web/styles.css" \
+            "Contents/Resources/web/assets/scene/scene-player.png"
+          do
+            test -e "${APP}/${f}" || { echo "缺少 ${f}"; exit 1; }
+          done
+          echo "✓ 产物结构完整"
+
+      - name: 校验可执行文件架构
+        run: |
+          file build/Air-Waves.app/Contents/MacOS/AirWaves
+          lipo -info build/Air-Waves.app/Contents/MacOS/AirWaves
+          # 必须是 arm64，否则与 arm64-apple-macos13.0 的构建目标不符
+          lipo -info build/Air-Waves.app/Contents/MacOS/AirWaves | grep -q arm64
+
+      - name: 校验签名
+        run: |
+          codesign -dv build/Air-Waves.app 2>&1 | head -5
+          codesign -v build/Air-Waves.app && echo "✓ ad-hoc 签名有效"
+
+      - name: 校验 DMG 完整性
+        run: |
+          set -e
+          DMG="${{ steps.artifact.outputs.dmg }}"
+          hdiutil verify "${DMG}"
+          echo "✓ DMG 校验通过"
+
+      - name: 挂载 DMG 并核对内容
+        run: |
+          set -e
+          DMG="${{ steps.artifact.outputs.dmg }}"
+          MOUNT="$(hdiutil attach "${DMG}" -nobrowse -readonly | grep -o '/Volumes/.*' | head -1)"
+          echo "挂载点：${MOUNT}"
+          ls -la "${MOUNT}"
+          test -d "${MOUNT}/Air-Waves.app" || { echo "DMG 内缺少 App"; exit 1; }
+          test -L "${MOUNT}/Applications" || { echo "DMG 内缺少 Applications 快捷方式"; exit 1; }
+          codesign -v "${MOUNT}/Air-Waves.app" && echo "✓ DMG 内 App 签名有效"
+          hdiutil detach "${MOUNT}"
+
+      # ---------------------------------------------------------------- 上传
+      - name: 上传为 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Air-Waves-${{ steps.artifact.outputs.version }}-dmg
+          path: build/*.dmg
+          if-no-files-found: error
+
+      - name: 生成校验和
+        run: |
+          DMG="${{ steps.artifact.outputs.dmg }}"
+          shasum -a 256 "${DMG}" | tee build/checksums.txt
+          echo "SHA-256 已生成"
+
+      - name: 发布 Release
+        # 推送标签时自动发布；手动触发时需勾选 publish_release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish_release == true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.artifact.outputs.version) }}
+          name: Air-Waves macOS 客户端 ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.artifact.outputs.version) }}
+          files: |
+            build/*.dmg
+            build/checksums.txt
+          draft: false
+          generate_release_notes: true
+          body: |
+            ## Air-Waves macOS 客户端
+
+            ### 安装
+
+            1. 下载下面的 `.dmg`
+            2. 打开后把 **Air-Waves.app** 拖到 **Applications**
+            3. 首次打开若被 Gatekeeper 拦截：
+
+               ```bash
+               xattr -dr com.apple.quarantine /Applications/Air-Waves.app
+               ```
+
+               或在「系统设置 → 隐私与安全性」中点「仍要打开」。
+
+            ### 说明
+
+            - **仅支持 Apple Silicon（arm64）**，最低 macOS 13.0
+            - 使用 **ad-hoc 签名**，未做 Apple 公证，因此会有上述 Gatekeeper 提示
+            - **零网络请求**，不收集任何数据
+            - 双击 Finder 里的 App 图标即可运行
+
+            ### 这个包需要网页应用资源吗？
+
+            不需要。构建时已把网页应用的 `index.html` / `app.js` / `audio.js` /
+            `styles.css` 与实际被引用的 3 张背景图一起打包进 App，产物是自包含的。
