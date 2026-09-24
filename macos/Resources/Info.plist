@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+	<!-- ================================================================
+	     Air-Waves 私人 macOS 客户端 — 应用元信息
+
+	     注意：本 App 仅在本机构建、本机使用，不对外分发。
+	     上游 Air-Waves 网页应用未附带许可证（默认保留所有权利），
+	     因此这里明确声明「个人本地修改版本」。
+	     ================================================================ -->
+
+	<key>CFBundleName</key>
+	<string>Air-Waves</string>
+
+	<key>CFBundleDisplayName</key>
+	<string>Air-Waves</string>
+
+	<key>CFBundleExecutable</key>
+	<string>AirWaves</string>
+
+	<key>CFBundleIdentifier</key>
+	<string>com.airwaves.private</string>
+
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+
+	<key>CFBundleSignature</key>
+	<string>????</string>
+
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+
+	<key>CFBundleVersion</key>
+	<string>1</string>
+
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+
+	<!-- 最低系统版本：SwiftUI App 生命周期与 WKWebView 相关 API 的最低要求 -->
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+
+	<!-- false：需要 Dock 图标与常规菜单栏（本项目明确要求） -->
+	<key>LSUIElement</key>
+	<false/>
+
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.healthcare-fitness</string>
+
+	<key>NSHighResolutionCapable</key>
+	<true/>
+
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+
+	<!-- 本应用不联网、不访问用户文件、不使用麦克风或摄像头。
+	     整个 Info.plist 里刻意没有任何 NS*UsageDescription，
+	     因为确实不存在需要授权的系统能力。 -->
+
+	<key>NSHumanReadableCopyright</key>
+	<string>私人本地构建版本，仅供个人使用，不对外分发。原始网页应用 Air-Waves 版权归其作者所有（上游未附带许可证）。</string>
+
+	<!-- 构建时由 desktop/scripts/build.sh 写入实际提交号 -->
+	<key>AirWavesSourceRevision</key>
+	<string>unknown</string>
+
+	<key>AirWavesBuildFlavor</key>
+	<string>private-local</string>
+
+</dict>
+</plist>

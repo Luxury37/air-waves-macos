@@ -1,0 +1,18 @@
+# ---- 构建产物（不入库）----
+build/
+*.app
+*.dmg
+
+# ---- 生成物 ----
+macos/Resources/AppIcon.icns
+macos/Resources/icon-source.png
+
+# ---- 本地证书 / 签名材料（绝不入库）----
+*.p12
+*.cer
+*.certSigningRequest
+*.mobileprovision
+*.provisionprofile
+
+# ---- 日志 ----
+*.log
